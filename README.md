@@ -55,4 +55,4 @@ The script implements a wrapper around the standard `uv` command that:
 
 ## License
 
-See the LICENSE file for details.
+See the [LICENSE](./LICENSE) file for details.
