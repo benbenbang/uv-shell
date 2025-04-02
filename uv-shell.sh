@@ -88,7 +88,8 @@ function uv() {
 
         # Create venv if needed
         if [[ ! -d "$venv_path" ]]; then
-            command uv venv "$venv_path"
+            shift
+            command uv venv "$venv_path" "$@"
         fi
 
         # Get bin directory based on platform
