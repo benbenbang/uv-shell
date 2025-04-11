@@ -83,7 +83,8 @@ function _uv_activate_venv() {
 # Main uv function
 function uv() {
     if [[ "$1" == "shell" ]]; then
-        local venv_path=".venv"
+        local venv_name=".venv"
+        local venv_path="$(realpath "$venv_name" 2>/dev/null || readlink -f "$venv_name" 2>/dev/null || echo "$(pwd)/$venv_name")"
         local project_name=${PWD##*/}  # Extract current directory name
 
         # Create venv if needed
@@ -101,7 +102,7 @@ function uv() {
             local prompt_value="$project_name-py$py_version"
 
             # Update prompt in pyvenv.cfg
-            _uv_update_prompt "$venv_path" "$prompt_value"
+            _uv_update_prompt "$venv_path" "${prompt_value}"
         fi
 
         # Check if .venv directory exists after creation
@@ -116,3 +117,24 @@ function uv() {
         command uv "$@"
     fi
 }
+
+function venv_anchor() {
+    local venv_name=".venv"
+    local venv_path="$(realpath "$venv_name" 2>/dev/null || readlink -f "$venv_name" 2>/dev/null || echo "$(pwd)/$venv_name")"
+
+    if [[ -d "${venv_path}" && -f "${venv_path}/pyvenv.cfg" ]]; then
+        # Get bin directory based on platform
+        local bin_dir=$(_uv_get_bin_dir)
+
+        # Create activated empty file if it doesn't exist
+        if [[ ! -f "$venv_path/activated" ]]; then
+            touch "$venv_path/activated"
+        fi
+
+        # Set in-venv to use pip && Add venv bin directory to PATH
+        export VIRTUAL_ENV=1
+        export PATH="$venv_path/$bin_dir:$PATH"
+    fi
+}
+
+venv_anchor
