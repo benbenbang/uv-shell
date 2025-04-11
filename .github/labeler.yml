@@ -1,0 +1,21 @@
+triage:
+  - changed-files:
+      - any-glob-to-any-file: "**/*"
+
+enhancement:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*"
+
+workflows:
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/**/*"
+
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - README.md
+          - "**/*.md"
+          - "docs/**/*.md"
+          - "docs/mkdocs.yml"
