@@ -132,7 +132,7 @@ function venv_anchor() {
         fi
 
         # Set in-venv to use pip && Add venv bin directory to PATH
-        export VIRTUAL_ENV=1
+        export PIP_REQUIRE_VIRTUALENV=false
         export PATH="$venv_path/$bin_dir:$PATH"
     fi
 }
