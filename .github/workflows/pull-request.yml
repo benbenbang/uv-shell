@@ -24,3 +24,20 @@ jobs:
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
           configuration-path: .github/labeler.yml
+
+  rust-build-and-tests:
+    runs-on: ubuntu-latest
+    container: ghcr.io/benbenbang/uv-shell/prek
+    permissions:
+      contents: read
+      pull-requests: write
+      packages: read
+    steps:
+      - name: checkout repository
+        uses: actions/checkout@v5
+      - name: build binary
+        run: cargo build --verbose
+      - name: run test
+        run: cargo test --verbose
+    env:
+      CARGO_TERM_COLOR: always

@@ -1,58 +1,119 @@
-# UV Shell
+# uv-shell
 
-A shell wrapper for [UV](https://github.com/astral-sh/uv) that provides enhanced virtual environment management.
+A fast Rust binary that creates and activates Python virtual environments using [uv](https://github.com/astral-sh/uv). Zero external crate dependencies.
 
 ## Features
 
-- Simplified virtual environment creation and activation with a single command
-- Automatic environment naming based on project directory and Python version
-- Cross-platform support for macOS, Linux, and Windows
-- Support for multiple shells (bash, zsh, fish, PowerShell)
+- **`uv-shell`** -- Create `.venv` if missing, set a smart prompt (`<project>-py<version>`), and spawn an activated subshell
+- **`uv-shell anchor`** -- Print shell commands that activate `.venv` in the current shell (for use in shell rc files)
+- All `uv venv` options forwarded transparently (`--python`, `--seed`, `--clear`, `--prompt`, etc.)
+- Cross-platform: Unix (exec), Windows (PowerShell + CMD)
+- Shell completions for bash, zsh, fish, nushell, and PowerShell
 
-## Key Points, Limitations, and Manual Setup
-Essentially, the way that virtual environment prompt get updated `(project_name-python_version)` is very simple.
-It just needs to add the following line to your `./.venv/pyvenv.cfg` file:
+## Install
+
+```sh
+cargo install --path .
 ```
-prompt = "({project_name}-{python_version})"
+
+Or build locally:
+
+```sh
+cargo build --release
+# binary at target/release/uv-shell
 ```
-This is a manual setup, but it's very simple and works well.
 
-This repository is for the `uv-shell.sh` script, which aims for a more automated setup.
-
-## Installation
-
-1. Ensure you have [uv](https://github.com/astral-sh/uv) installed
-2. Clone this repository or download `uv-shell.sh`
-3. Add it to your shell configuration:
-
-```bash
-# In your .bashrc, .zshrc, or equivalent:
-source /path/to/uv-shell.sh
-```
+Requires [uv](https://docs.astral.sh/uv/getting-started/installation/) to be installed and on `PATH`.
 
 ## Usage
 
-Run the `uv shell` command in any project directory:
+### Create and activate a virtual environment
 
-```bash
-$ cd your-project
-$ uv shell
+```sh
+# Create .venv (if missing) and spawn an activated subshell
+uv-shell
+
+# With a specific Python version
+uv-shell -p 3.12
+
+# With seed packages (pip, setuptools, wheel)
+uv-shell --seed
+
+# Re-create an existing venv
+uv-shell --clear
+
+# Custom prompt instead of auto-generated <project>-py<version>
+uv-shell --prompt my-env
 ```
 
-This will:
-1. Create a virtual environment (`.venv`) if it doesn't exist
-2. Set the prompt to include the project name and Python version
-3. Activate the environment in a new shell session
+All options are forwarded to `uv venv`. Run `uv-shell --help` or `uv venv --help` for the full list.
 
-To exit the virtual environment, press `Ctrl+D` or type `exit`.
+To exit the activated subshell, press `Ctrl + D`.
 
-## How It Works
+### Auto-activate with anchor
 
-The script implements a wrapper around the standard `uv` command that:
-- Intercepts the `shell` subcommand to provide enhanced functionality
-- Passes all other subcommands directly to the original `uv` command
-- Handles platform-specific configuration for different operating systems and shells
+Add to your shell rc file to auto-activate `.venv` when it exists in the current directory:
+
+**bash / zsh** (`~/.bashrc` or `~/.zshrc`):
+```sh
+eval "$(uv-shell anchor)"
+```
+
+**fish** (`~/.config/fish/config.fish`):
+```fish
+uv-shell anchor | source
+```
+
+**PowerShell** (`$PROFILE`):
+```powershell
+uv-shell anchor | Invoke-Expression
+```
+
+**nushell** (`config.nu`):
+```nu
+# save to a file and source it
+uv-shell anchor --shell nushell | save -f ~/.venv-anchor.nu
+source ~/.venv-anchor.nu
+```
+
+The anchor command auto-detects your shell. Override with `--shell`:
+
+```sh
+uv-shell anchor --shell powershell
+uv-shell anchor --shell fish
+uv-shell anchor --shell cmd
+```
+
+### Shell completions
+
+```sh
+# bash
+eval "$(uv-shell completions bash)"
+
+# zsh (add to fpath)
+uv-shell completions zsh > "${fpath[1]}/_uv-shell"
+
+# fish
+uv-shell completions fish > ~/.config/fish/completions/uv-shell.fish
+
+# nushell
+uv-shell completions nushell | save -f ~/.config/nushell/uv-shell-completions.nu
+
+# PowerShell (add to $PROFILE)
+uv-shell completions powershell >> $PROFILE
+```
+
+## How it works
+
+| Step | What happens |
+|---|---|
+| 1. Resolve path | Canonicalize `.venv` relative to CWD |
+| 2. Create venv | Run `uv venv <path>` with forwarded options (if `.venv` missing or `--clear`) |
+| 3. Update prompt | Patch `pyvenv.cfg` with `prompt = <project>-py<version>` (skipped if `--prompt` given) |
+| 4. Activate | **Unix**: `exec $SHELL` with `VIRTUAL_ENV` and `PATH` set (replaces process, no nesting) / **Windows**: spawn PowerShell or CMD with env vars |
+
+The `anchor` command prints shell-appropriate commands to set `VIRTUAL_ENV`, `PIP_REQUIRE_VIRTUALENV`, and prepend the venv `bin`/`Scripts` directory to `PATH`.
 
 ## License
 
-See the [LICENSE](./LICENSE) file for details.
+[MIT](LICENSE)
