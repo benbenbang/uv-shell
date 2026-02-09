@@ -12,6 +12,15 @@ A fast Rust binary that creates and activates Python virtual environments using 
 
 ## Install
 
+### Homebrew (macOS/Linux)
+
+```sh
+brew tap benbenbang/forge
+brew install uv-shell
+```
+
+### From source
+
 ```sh
 cargo install --path .
 ```
@@ -23,7 +32,7 @@ cargo build --release
 # binary at target/release/uv-shell
 ```
 
-Requires [uv](https://docs.astral.sh/uv/getting-started/installation/) to be installed and on `PATH`.
+**Requirements:** [uv](https://docs.astral.sh/uv/getting-started/installation/) must be installed and on `PATH`.
 
 ## Usage
 
