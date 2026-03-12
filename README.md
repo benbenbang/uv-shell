@@ -9,6 +9,7 @@ A fast Rust binary that creates and activates Python virtual environments using 
 - All `uv venv` options forwarded transparently (`--python`, `--seed`, `--clear`, `--prompt`, etc.)
 - Cross-platform: Unix (exec), Windows (PowerShell + CMD)
 - Shell completions for bash, zsh, fish, nushell, and PowerShell
+- **`uv` plugin wrapper** (`adds-on`) -- Enables `uv shell` as a native subcommand and injects plugins into `uv <TAB>` completions
 
 ## Install
 
@@ -111,6 +112,52 @@ uv-shell completions nushell | save -f ~/.config/nushell/uv-shell-completions.nu
 # PowerShell (add to $PROFILE)
 uv-shell completions powershell >> $PROFILE
 ```
+
+## uv plugin wrapper (adds-on)
+
+The `adds-on` directory contains a small Rust binary also named `uv` that acts as a plugin dispatcher. When installed before the real `uv` in `PATH`, it enables:
+
+- `uv shell` → automatically finds and runs `uv-shell`
+- `uv <any-plugin>` → finds and runs `uv-<plugin>` from PATH
+- `uv <TAB>` → shows installed plugins alongside built-in uv subcommands
+- `uv shell <TAB>` → shows `uv-shell`'s own options
+
+### Setup (after `brew install uv-shell`)
+
+```sh
+# Add the wrapper before the real uv in PATH
+export PATH="$(brew --prefix uv-shell)/libexec/bin:$PATH"
+
+# Optional: skip PATH scan on every uv call (performance)
+export UV_REAL_PATH="$(brew --prefix uv)/bin/uv"
+```
+
+Then reload completions once:
+
+```sh
+# zsh
+unfunction _uv _uv_commands 2>/dev/null
+eval "$(uv generate-shell-completion zsh)"
+
+# bash
+eval "$(uv generate-shell-completion bash)"
+
+# fish
+uv generate-shell-completion fish | source
+```
+
+Add both `export` lines and the completion eval to your shell rc file so it applies to every session.
+
+### How it works
+
+```
+uv shell          →  finds uv-shell in PATH  →  exec uv-shell
+uv add requests   →  no uv-add plugin found  →  exec real uv add requests
+uv <TAB>          →  real uv completions + discovered plugins injected
+uv shell <TAB>    →  delegates to _uv-shell() from uv-shell's own completions
+```
+
+Any executable named `uv-<name>` on PATH is automatically discovered — no registration needed.
 
 ## How it works
 
