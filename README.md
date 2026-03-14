@@ -133,8 +133,11 @@ export PATH="$(brew --prefix uv-shell)/libexec/bin:$PATH"
 **2. Install completions once:**
 
 ```sh
-# zsh — write to fpath, auto-loaded on every new session
+# zsh — auto-loaded every session, plugins discovered dynamically at tab-press time
 uv generate-shell-completion zsh > "${fpath[1]}/_uv"
+
+# nushell — then add `use ~/.config/nushell/completions/uv.nu` to config.nu
+uv generate-shell-completion nushell | save ~/.config/nushell/completions/uv.nu
 
 # bash
 echo 'eval "$(uv generate-shell-completion bash)"' >> ~/.bashrc
@@ -143,7 +146,9 @@ echo 'eval "$(uv generate-shell-completion bash)"' >> ~/.bashrc
 uv generate-shell-completion fish > ~/.config/fish/completions/uv.fish
 ```
 
-That's it. No `eval`, no reloading. New plugins are picked up automatically on every `<TAB>`.
+**zsh:** no `eval`, no reloading — new plugins appear at tab-press time automatically.
+
+**nushell / bash / fish:** re-run the above after installing new plugins.
 
 **Optional:** skip PATH scan on every `uv` call:
 ```sh
