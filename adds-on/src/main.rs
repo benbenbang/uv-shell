@@ -6,7 +6,13 @@ fn main() {
     let args: Vec<String> = env::args().collect();
 
     match args.get(1).map(|s| s.as_str()) {
-        // Intercept completions to inject discovered plugins
+        // Dynamic plugin discovery — called by shell completion at tab-press time
+        Some("__complete") => {
+            for plugin in discover_plugins() {
+                println!("{}:Plugin: {}", plugin, plugin);
+            }
+        }
+        // Intercept completions to inject plugin hooks
         Some("generate-shell-completion") => {
             let shell = args.get(2).map(|s| s.as_str()).unwrap_or("bash");
             generate_completions(shell);
@@ -162,25 +168,28 @@ fn inject_bash(completions: String, plugins: &[String]) -> String {
     )
 }
 
-/// Zsh: inject plugins into `_uv_commands()` list, add case dispatch, and
-/// append each plugin's completion function body.
+/// Zsh: inject a dynamic plugin lookup into `_uv_commands()` so that
+/// `uv <TAB>` discovers plugins at tab-press time (no re-eval needed).
+/// Sub-completions (`uv shell <TAB>`) are still injected statically since
+/// zsh needs the function body defined in the session.
 fn inject_zsh(completions: String, plugins: &[String]) -> String {
-    // Step 1: add plugins to the _uv_commands() list
-    let plugin_entries: String = plugins
-        .iter()
-        .map(|p| format!("'{}:Plugin: {}' \\\n", p, p))
-        .collect();
-
+    // Step 1: replace the static _describe call with a dynamic one that also
+    // calls `uv __complete` at tab-press time
+    let dynamic_block = concat!(
+        "    # Dynamic plugin discovery — merge into commands at tab-press time\n",
+        "    local -a _uv_plugins\n",
+        "    _uv_plugins=(\"${(@f)$(uv __complete 2>/dev/null)}\")\n",
+        "    (( ${#_uv_plugins} )) && commands+=($_uv_plugins)\n",
+        "    _describe -t commands 'uv commands' commands \"$@\"\n",
+        "}",
+    );
     let mut result = completions.replace(
-        "'help:Display documentation for a command' \\\n    )",
-        &format!(
-            "'help:Display documentation for a command' \\\n{}    )",
-            plugin_entries
-        ),
+        "    _describe -t commands 'uv commands' commands \"$@\"\n}",
+        dynamic_block,
     );
 
-    // Step 2: for each plugin that supports `completions zsh`, inject a case
-    // dispatch and append its function definitions
+    // Step 2: for each currently installed plugin that supports `completions zsh`,
+    // inject a case dispatch and append its function body
     for plugin in plugins {
         if let Some(body) = plugin_zsh_body(plugin) {
             result = inject_zsh_dispatch(result, plugin, &body);
@@ -264,12 +273,13 @@ mod tests {
     }
 
     #[test]
-    fn test_inject_zsh_appends_plugins() {
-        let fake = "'help:Display documentation for a command' \\\n    )".to_string();
-        let plugins = vec!["shell".to_string()];
-        let result = inject_zsh(fake, &plugins);
-        assert!(result.contains("'shell:Plugin: shell'"));
-        assert!(result.contains("'help:Display documentation for a command'"));
+    fn test_inject_zsh_dynamic_lookup() {
+        let fake = "    _describe -t commands 'uv commands' commands \"$@\"\n}".to_string();
+        let result = inject_zsh(fake, &[]);
+        assert!(result.contains("uv __complete"), "should inject dynamic __complete call");
+        assert!(result.contains("_uv_plugins"), "should declare _uv_plugins array");
+        assert!(result.contains("commands+=($_uv_plugins)"), "should merge plugins into commands");
+        assert!(result.contains("_describe -t commands 'uv commands'"), "should use single describe call");
     }
 
     #[test]

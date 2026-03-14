@@ -124,29 +124,31 @@ The `adds-on` directory contains a small Rust binary also named `uv` that acts a
 
 ### Setup (after `brew install uv-shell`)
 
-```sh
-# Add the wrapper before the real uv in PATH
-export PATH="$(brew --prefix uv-shell)/libexec/bin:$PATH"
+**1. Add to `~/.zshrc`** (permanent, one line):
 
-# Optional: skip PATH scan on every uv call (performance)
-export UV_REAL_PATH="$(brew --prefix uv)/bin/uv"
+```sh
+export PATH="$(brew --prefix uv-shell)/libexec/bin:$PATH"
 ```
 
-Then reload completions once:
+**2. Install completions once:**
 
 ```sh
-# zsh
-unfunction _uv _uv_commands 2>/dev/null
-eval "$(uv generate-shell-completion zsh)"
+# zsh — write to fpath, auto-loaded on every new session
+uv generate-shell-completion zsh > "${fpath[1]}/_uv"
 
 # bash
-eval "$(uv generate-shell-completion bash)"
+echo 'eval "$(uv generate-shell-completion bash)"' >> ~/.bashrc
 
 # fish
-uv generate-shell-completion fish | source
+uv generate-shell-completion fish > ~/.config/fish/completions/uv.fish
 ```
 
-Add both `export` lines and the completion eval to your shell rc file so it applies to every session.
+That's it. No `eval`, no reloading. New plugins are picked up automatically on every `<TAB>`.
+
+**Optional:** skip PATH scan on every `uv` call:
+```sh
+export UV_REAL_PATH="/opt/homebrew/bin/uv"
+```
 
 ### How it works
 
