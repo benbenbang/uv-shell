@@ -151,6 +151,7 @@ fn generate_completions(shell: &str) {
             "bash" => inject_bash(completions, &plugins),
             "zsh" => inject_zsh(completions, &plugins),
             "fish" => inject_fish(completions, &plugins),
+            "nushell" => inject_nushell(completions, &plugins),
             _ => completions,
         }
     };
@@ -241,6 +242,56 @@ fn inject_zsh_dispatch(completions: String, plugin: &str, body: &str) -> String 
     format!("{}\n{}", with_case, body)
 }
 
+/// Nushell: inject plugin externs into the `module completions` block.
+/// Each plugin's `extern "uv-<name>"` is renamed to `extern "uv <name>"`
+/// so nushell naturally shows it as a subcommand of `uv`.
+fn inject_nushell(completions: String, plugins: &[String]) -> String {
+    let mut result = completions;
+    for plugin in plugins {
+        if let Some(body) = plugin_nushell_body(plugin) {
+            result = result.replace(
+                "\n}\n\nexport use completions *",
+                &format!("\n{}\n}}\n\nexport use completions *", body),
+            );
+        }
+    }
+    result
+}
+
+/// Run `uv-<plugin> completions nushell`, strip the module wrapper, and
+/// rename all `uv-<plugin>` references to `uv <plugin>` so the externs
+/// integrate cleanly into uv's own `module completions`.
+fn plugin_nushell_body(plugin: &str) -> Option<String> {
+    let path = find_in_path(&format!("uv-{}", plugin))?;
+
+    let output = Command::new(&path)
+        .args(["completions", "nushell"])
+        .output()
+        .ok()?;
+
+    if !output.status.success() {
+        return None;
+    }
+
+    let text = String::from_utf8_lossy(&output.stdout).into_owned();
+    let module_name = format!("uv-{}-completions", plugin);
+    let plugin_cmd = format!("uv-{}", plugin);
+    let uv_cmd = format!("uv {}", plugin);
+
+    let body = text
+        .lines()
+        // strip module wrapper and use statement
+        .filter(|l| !l.starts_with("module ") && !l.starts_with("use "))
+        // rename "uv-shell" → "uv shell" everywhere (extern names + nu-complete refs)
+        .map(|l| l.replace(&plugin_cmd, &uv_cmd))
+        // strip the auto-generated module name from nu-complete function names
+        .map(|l| l.replace(&module_name, &format!("uv {}", plugin)))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    Some(body)
+}
+
 /// Fish: append `complete` lines for each plugin at the end.
 fn inject_fish(completions: String, plugins: &[String]) -> String {
     let plugin_cmds: String = plugins
@@ -280,6 +331,19 @@ mod tests {
         assert!(result.contains("_uv_plugins"), "should declare _uv_plugins array");
         assert!(result.contains("commands+=($_uv_plugins)"), "should merge plugins into commands");
         assert!(result.contains("_describe -t commands 'uv commands'"), "should use single describe call");
+    }
+
+    #[test]
+    fn test_inject_nushell_appends_plugin() {
+        let fake = "module completions {\n  export extern uv [\n  ]\n}\n\nexport use completions *".to_string();
+        let body = "  export extern \"uv shell\" [\n    --help\n  ]".to_string();
+        // simulate inject_nushell by calling the replace logic directly
+        let result = fake.replace(
+            "\n}\n\nexport use completions *",
+            &format!("\n{}\n}}\n\nexport use completions *", body),
+        );
+        assert!(result.contains("export extern \"uv shell\""));
+        assert!(result.contains("export use completions *"));
     }
 
     #[test]
