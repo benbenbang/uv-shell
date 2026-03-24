@@ -74,4 +74,4 @@ module uv-shell-completions {
     ]
 }
 
-use uv-shell-completions *
+export use uv-shell-completions *
