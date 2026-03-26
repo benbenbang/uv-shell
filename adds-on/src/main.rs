@@ -2,10 +2,46 @@ use std::env;
 use std::path::PathBuf;
 use std::process::{Command, exit};
 
+fn print_help() {
+    println!(
+        "uv — plugin-aware wrapper for the real uv
+
+USAGE:
+    uv <command> [args...]
+
+PLUGIN DISPATCH:
+    Any executable named `uv-<name>` on PATH is treated as a plugin.
+
+    uv shell [args]     →  finds uv-shell in PATH, execs it
+    uv <name> [args]    →  finds uv-<name> in PATH, execs it
+    uv <builtin> [args] →  no plugin found, passes through to real uv
+
+SPECIAL COMMANDS:
+    uv generate-shell-completion <shell>
+                        →  real uv completions + plugins injected
+                           shells: bash zsh fish nushell
+    uv __complete       →  list discovered plugins (used by shell completions)
+    uv --help, -h       →  show this message
+
+ENVIRONMENT:
+    UV_REAL_PATH        Skip PATH scan — point directly to the real uv binary
+                        e.g. export UV_REAL_PATH=/opt/homebrew/bin/uv
+
+SETUP:
+    export PATH=\"$(brew --prefix uv-shell)/libexec/bin:$PATH\"
+    uv generate-shell-completion zsh > \"\${fpath[1]}/_uv\"
+
+Any unrecognised command is forwarded to the real uv unchanged."
+    );
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
 
     match args.get(1).map(|s| s.as_str()) {
+        Some("-h") | Some("--help") => {
+            print_help();
+        }
         // Dynamic plugin discovery — called by shell completion at tab-press time
         Some("__complete") => {
             for plugin in discover_plugins() {

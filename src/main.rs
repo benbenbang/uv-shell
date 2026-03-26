@@ -281,7 +281,12 @@ Options (forwarded to `uv venv`):
   -v, --verbose                 Verbose output
   -h, --help                    Show this help message
 
-All other `uv venv` options are also forwarded. See `uv venv --help` for the full list."
+All other `uv venv` options are also forwarded. See `uv venv --help` for the full list.
+
+uv plugin wrapper (adds-on):
+  Enables `uv shell` as a native uv subcommand with plugin-aware tab completions.
+  Any `uv-<name>` binary on PATH becomes callable as `uv <name>`.
+  See the README for setup instructions."
     );
 }
 

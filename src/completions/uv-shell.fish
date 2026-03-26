@@ -13,7 +13,8 @@ complete -c uv-shell -n '__fish_use_subcommand' -s p -l python -d 'Python interp
 complete -c uv-shell -n '__fish_use_subcommand' -l seed -d 'Install seed packages (pip, setuptools, wheel)'
 complete -c uv-shell -n '__fish_use_subcommand' -s c -l clear -d 'Re-create the venv even if .venv already exists'
 complete -c uv-shell -n '__fish_use_subcommand' -l allow-existing -d 'Preserve existing files at the target path'
-complete -c uv-shell -n '__fish_use_subcommand' -l prompt -d 'Custom prompt prefix (skips auto-prompt)' -r
+complete -c uv-shell -n '__fish_use_subcommand' -l prefix -d 'Override project name in prompt (keeps -pyX.XX suffix)' -r
+complete -c uv-shell -n '__fish_use_subcommand' -l prompt -d 'Full custom prompt (replaces auto-generated name entirely)' -r
 complete -c uv-shell -n '__fish_use_subcommand' -l system-site-packages -d 'Access system site packages'
 complete -c uv-shell -n '__fish_use_subcommand' -l relocatable -d 'Make the venv relocatable'
 complete -c uv-shell -n '__fish_use_subcommand' -l no-project -d 'Avoid discovering a project or workspace'
