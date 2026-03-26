@@ -29,7 +29,7 @@ ENVIRONMENT:
 
 SETUP:
     export PATH=\"$(brew --prefix uv-shell)/libexec/bin:$PATH\"
-    uv generate-shell-completion zsh > \"\${fpath[1]}/_uv\"
+    uv generate-shell-completion zsh > \"<your-fpath>/_uv\"
 
 Any unrecognised command is forwarded to the real uv unchanged."
     );
