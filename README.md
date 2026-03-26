@@ -52,8 +52,11 @@ uv-shell --seed
 # Re-create an existing venv
 uv-shell --clear
 
-# Custom prompt instead of auto-generated <project>-py<version>
-uv-shell --prompt my-env
+# Override just the project name (keeps -pyX.XX suffix)
+uv-shell --prefix myproject       # → myproject-py3.12
+
+# Full custom prompt (replaces everything)
+uv-shell --prompt my-env          # → my-env
 ```
 
 All options are forwarded to `uv venv`. Run `uv-shell --help` or `uv venv --help` for the full list.
