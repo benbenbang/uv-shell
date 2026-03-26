@@ -36,7 +36,8 @@ module uv-shell-completions {
         --seed                        # Install seed packages (pip, setuptools, wheel)
         --clear(-c)                   # Re-create the venv even if .venv already exists
         --allow-existing              # Preserve existing files at the target path
-        --prompt: string              # Custom prompt prefix (skips auto-prompt)
+        --prefix: string              # Override project name in prompt (keeps -pyX.XX suffix)
+        --prompt: string              # Full custom prompt (replaces auto-generated name entirely)
         --system-site-packages        # Access system site packages
         --relocatable                 # Make the venv relocatable
         --no-project                  # Avoid discovering a project or workspace

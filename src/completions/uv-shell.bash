@@ -6,7 +6,7 @@ _uv_shell() {
     local commands="anchor completions"
 
     # All options
-    local opts="-p --python --seed -c --clear --allow-existing --prompt
+    local opts="-p --python --seed -c --clear --allow-existing --prefix --prompt
         --system-site-packages --relocatable --no-project --no-config
         --index-strategy --keyring-provider --exclude-newer --link-mode
         --index --default-index -i --index-url --extra-index-url
@@ -17,7 +17,7 @@ _uv_shell() {
 
     # Handle completions for options that take a value
     case "$prev" in
-        -p|--python|--prompt|--index-strategy|--keyring-provider| \
+        -p|--python|--prefix|--prompt|--index-strategy|--keyring-provider| \
         --link-mode|--exclude-newer|--exclude-newer-package| \
         --index|--default-index|-i|--index-url|--extra-index-url| \
         -f|--find-links|--cache-dir|--color|--directory|--project| \
