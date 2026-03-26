@@ -59,7 +59,7 @@ fn create_venv(venv_path: &PathBuf, extra_args: &[String]) {
     }
 }
 
-fn update_prompt(venv_path: &PathBuf) {
+fn update_prompt(venv_path: &PathBuf, prefix: Option<&str>) {
     let cfg_path = venv_path.join("pyvenv.cfg");
     if !cfg_path.exists() {
         return;
@@ -81,11 +81,13 @@ fn update_prompt(venv_path: &PathBuf) {
         _ => return,
     };
 
-    // Get project name from current directory
-    let project_name = env::current_dir()
-        .ok()
-        .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
-        .unwrap_or_else(|| "project".to_string());
+    // Use --prefix if given, otherwise fall back to current directory name
+    let project_name = prefix.map(|s| s.to_string()).unwrap_or_else(|| {
+        env::current_dir()
+            .ok()
+            .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
+            .unwrap_or_else(|| "project".to_string())
+    });
 
     let prompt_value = format!("{project_name}-py{py_version}");
 
@@ -269,7 +271,8 @@ Options (forwarded to `uv venv`):
       --seed                    Install seed packages (pip, setuptools, wheel)
   -c, --clear                   Re-create the venv even if .venv already exists
       --allow-existing          Preserve existing files at the target path
-      --prompt <PROMPT>         Custom prompt prefix (skips auto-prompt)
+      --prefix <PREFIX>         Override project name in prompt (keeps -pyX.XX suffix)
+      --prompt <PROMPT>         Full custom prompt (replaces auto-generated name entirely)
       --system-site-packages    Access system site packages
       --relocatable             Make the venv relocatable
       --no-project              Avoid discovering a project or workspace
@@ -298,11 +301,12 @@ fn print_completions(shell: &str) {
 }
 
 /// Scan args for flags we need to know about, without consuming them.
-/// Returns (has_clear, has_custom_prompt, has_help).
-fn scan_flags(args: &[String]) -> (bool, bool, bool) {
+/// Returns (has_clear, has_custom_prompt, has_help, prefix).
+fn scan_flags(args: &[String]) -> (bool, bool, bool, Option<String>) {
     let mut has_clear = false;
     let mut has_prompt = false;
     let mut has_help = false;
+    let mut prefix: Option<String> = None;
 
     let mut iter = args.iter();
     while let Some(arg) = iter.next() {
@@ -312,16 +316,21 @@ fn scan_flags(args: &[String]) -> (bool, bool, bool) {
                 has_prompt = true;
                 iter.next(); // skip the value
             }
+            "--prefix" => {
+                prefix = iter.next().map(|s| s.to_string());
+            }
             "-h" | "--help" => has_help = true,
             _ => {
                 if arg.starts_with("--prompt=") {
                     has_prompt = true;
+                } else if let Some(val) = arg.strip_prefix("--prefix=") {
+                    prefix = Some(val.to_string());
                 }
             }
         }
     }
 
-    (has_clear, has_prompt, has_help)
+    (has_clear, has_prompt, has_help, prefix)
 }
 
 /// Parse `anchor` subcommand args for `--shell <name>`.
@@ -368,7 +377,7 @@ fn main() {
         }
     }
 
-    let (has_clear, has_custom_prompt, has_help) = scan_flags(user_args);
+    let (has_clear, has_custom_prompt, has_help, prefix) = scan_flags(user_args);
 
     if has_help {
         print_help();
@@ -383,7 +392,7 @@ fn main() {
     }
 
     if !has_custom_prompt {
-        update_prompt(&venv_path);
+        update_prompt(&venv_path, prefix.as_deref());
     }
 
     if venv_path.is_dir() {
@@ -409,7 +418,7 @@ mod tests {
 
     #[test]
     fn scan_flags_empty() {
-        let (clear, prompt, help) = scan_flags(&args(&[]));
+        let (clear, prompt, help, _) = scan_flags(&args(&[]));
         assert!(!clear);
         assert!(!prompt);
         assert!(!help);
@@ -417,43 +426,43 @@ mod tests {
 
     #[test]
     fn scan_flags_clear_short() {
-        let (clear, _, _) = scan_flags(&args(&["-c"]));
+        let (clear, _, _, _) = scan_flags(&args(&["-c"]));
         assert!(clear);
     }
 
     #[test]
     fn scan_flags_clear_long() {
-        let (clear, _, _) = scan_flags(&args(&["--clear"]));
+        let (clear, _, _, _) = scan_flags(&args(&["--clear"]));
         assert!(clear);
     }
 
     #[test]
     fn scan_flags_prompt_space() {
-        let (_, prompt, _) = scan_flags(&args(&["--prompt", "my-env"]));
+        let (_, prompt, _, _) = scan_flags(&args(&["--prompt", "my-env"]));
         assert!(prompt);
     }
 
     #[test]
     fn scan_flags_prompt_eq() {
-        let (_, prompt, _) = scan_flags(&args(&["--prompt=my-env"]));
+        let (_, prompt, _, _) = scan_flags(&args(&["--prompt=my-env"]));
         assert!(prompt);
     }
 
     #[test]
     fn scan_flags_help_short() {
-        let (_, _, help) = scan_flags(&args(&["-h"]));
+        let (_, _, help, _) = scan_flags(&args(&["-h"]));
         assert!(help);
     }
 
     #[test]
     fn scan_flags_help_long() {
-        let (_, _, help) = scan_flags(&args(&["--help"]));
+        let (_, _, help, _) = scan_flags(&args(&["--help"]));
         assert!(help);
     }
 
     #[test]
     fn scan_flags_combined() {
-        let (clear, prompt, help) =
+        let (clear, prompt, help, _) =
             scan_flags(&args(&["-p", "3.12", "--clear", "--prompt", "x", "-v"]));
         assert!(clear);
         assert!(prompt);
@@ -461,9 +470,21 @@ mod tests {
     }
 
     #[test]
+    fn scan_flags_prefix_space() {
+        let (_, _, _, prefix) = scan_flags(&args(&["--prefix", "myproject"]));
+        assert_eq!(prefix.as_deref(), Some("myproject"));
+    }
+
+    #[test]
+    fn scan_flags_prefix_eq() {
+        let (_, _, _, prefix) = scan_flags(&args(&["--prefix=myproject"]));
+        assert_eq!(prefix.as_deref(), Some("myproject"));
+    }
+
+    #[test]
     fn scan_flags_prompt_value_not_misread() {
         // The value after --prompt should be skipped, not treated as a flag
-        let (clear, prompt, help) = scan_flags(&args(&["--prompt", "--clear"]));
+        let (clear, prompt, help, _) = scan_flags(&args(&["--prompt", "--clear"]));
         assert!(prompt);
         // "--clear" is consumed as the prompt value, not as the clear flag
         assert!(!clear);
