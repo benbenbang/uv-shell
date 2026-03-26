@@ -388,7 +388,22 @@ fn main() {
     let needs_create = !venv_path.is_dir() || has_clear;
 
     if needs_create {
-        create_venv(&venv_path, user_args);
+        // Strip --prefix and its value — it's our flag, unknown to `uv venv`
+        let forwarded: Vec<String> = {
+            let mut out = Vec::new();
+            let mut iter = user_args.iter();
+            while let Some(arg) = iter.next() {
+                if arg == "--prefix" {
+                    iter.next(); // skip value
+                } else if arg.starts_with("--prefix=") {
+                    // skip entirely
+                } else {
+                    out.push(arg.clone());
+                }
+            }
+            out
+        };
+        create_venv(&venv_path, &forwarded);
     }
 
     if !has_custom_prompt {
