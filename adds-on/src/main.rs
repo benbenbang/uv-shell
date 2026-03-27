@@ -21,6 +21,7 @@ SPECIAL COMMANDS:
                         →  real uv completions + plugins injected
                            shells: bash zsh fish nushell
     uv __complete       →  list discovered plugins (used by shell completions)
+    uv --version, -V    →  show wrapper version
     uv --help, -h       →  show this message
 
 ENVIRONMENT:
@@ -41,6 +42,9 @@ fn main() {
     match args.get(1).map(|s| s.as_str()) {
         Some("-h") | Some("--help") => {
             print_help();
+        }
+        Some("--version") | Some("-V") => {
+            println!("uv (plugin wrapper) {}", env!("CARGO_PKG_VERSION"));
         }
         // Dynamic plugin discovery — called by shell completion at tab-press time
         Some("__complete") => {
