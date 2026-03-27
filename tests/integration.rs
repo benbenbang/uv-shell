@@ -76,6 +76,10 @@ fn anchor_no_venv_reports_on_stderr() {
         stderr.contains("no .venv found"),
         "anchor should explain why it produced no output, got: {stderr}"
     );
+    assert!(
+        stderr.contains("or any parent directory"),
+        "anchor should mention traversal in message, got: {stderr}"
+    );
     let _ = fs::remove_dir_all(&dir);
 }
 
@@ -94,6 +98,33 @@ fn anchor_prints_exports_bash() {
     assert!(stdout.contains("export VIRTUAL_ENV=\""));
     assert!(stdout.contains("export PIP_REQUIRE_VIRTUALENV=false"));
     assert!(stdout.contains("export PATH=\""));
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn anchor_finds_venv_in_parent_directory() {
+    // project root has .venv; anchor is run from a subdirectory
+    let dir = tmpdir_with_venv("anchor-traversal");
+    let subdir = dir.join("src/utils");
+    fs::create_dir_all(&subdir).unwrap();
+
+    let out = Command::new(bin())
+        .args(["anchor", "--shell", "bash"])
+        .current_dir(&subdir)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        stdout.contains("export VIRTUAL_ENV=\""),
+        "anchor should find .venv two levels up, got:\n{stdout}"
+    );
+    // The VIRTUAL_ENV path should point to the root .venv, not a subdir .venv
+    assert!(
+        stdout.contains(dir.join(".venv").to_str().unwrap()),
+        "VIRTUAL_ENV should point to root .venv"
+    );
     let _ = fs::remove_dir_all(&dir);
 }
 
