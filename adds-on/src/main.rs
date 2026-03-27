@@ -260,11 +260,16 @@ fn generate_completions(shell: &str) {
 /// Bash: the top-level opts string ends with `generate-shell-completion help"`.
 /// We append plugin names right before the closing quote.
 fn inject_bash(completions: String, plugins: &[String]) -> String {
+    let needle = " generate-shell-completion help\"";
     let plugin_str = plugins.join(" ");
-    completions.replace(
-        " generate-shell-completion help\"",
+    let result = completions.replace(
+        needle,
         &format!(" generate-shell-completion help {}\"", plugin_str),
-    )
+    );
+    if result == completions {
+        eprintln!("uv: warning: bash completion injection point not found; plugin completions skipped (uv may have changed its output format)");
+    }
+    result
 }
 
 /// Zsh: inject a dynamic plugin lookup into `_uv_commands()` so that
@@ -282,10 +287,11 @@ fn inject_zsh(completions: String, plugins: &[String]) -> String {
         "    _describe -t commands 'uv commands' commands \"$@\"\n",
         "}",
     );
-    let mut result = completions.replace(
-        "    _describe -t commands 'uv commands' commands \"$@\"\n}",
-        dynamic_block,
-    );
+    let needle = "    _describe -t commands 'uv commands' commands \"$@\"\n}";
+    let mut result = completions.replace(needle, dynamic_block);
+    if result == completions {
+        eprintln!("uv: warning: zsh completion injection point not found; plugin completions skipped (uv may have changed its output format)");
+    }
 
     // Step 2: for each currently installed plugin that supports `completions zsh`,
     // inject a case dispatch and append its function body
@@ -329,12 +335,16 @@ fn plugin_zsh_body(plugin: &str) -> Option<String> {
 fn inject_zsh_dispatch(completions: String, plugin: &str, body: &str) -> String {
     // Insert the plugin case just before the closing `esac` of the inner
     // case $line[1] block. The 8-space indent is unique to that block.
+    let needle = ";;\n        esac\n    ;;\nesac\n}";
     let with_case = completions.replace(
-        ";;\n        esac\n    ;;\nesac\n}",
+        needle,
         &format!(
             ";;\n        ({plugin})\n            _uv-{plugin}\n        ;;\n        esac\n    ;;\nesac\n}}"
         ),
     );
+    if with_case == completions {
+        eprintln!("uv: warning: zsh dispatch injection point not found for plugin '{plugin}'; sub-completions skipped");
+    }
 
     // Append plugin function definitions after the closing } of _uv()
     format!("{}\n{}", with_case, body)
@@ -347,10 +357,15 @@ fn inject_nushell(completions: String, plugins: &[String]) -> String {
     let mut result = completions;
     for plugin in plugins {
         if let Some(body) = plugin_nushell_body(plugin) {
-            result = result.replace(
-                "\n}\n\nexport use completions *",
+            let needle = "\n}\n\nexport use completions *";
+            let next = result.replace(
+                needle,
                 &format!("\n{}\n}}\n\nexport use completions *", body),
             );
+            if next == result {
+                eprintln!("uv: warning: nushell completion injection point not found for plugin '{plugin}'; plugin completions skipped");
+            }
+            result = next;
         }
     }
     result
