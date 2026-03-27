@@ -149,6 +149,70 @@ fn update_prompt(venv_path: &PathBuf, prefix: Option<&str>) {
     let _ = fs::write(&cfg_path, new_content);
 }
 
+fn status() {
+    let cwd = env::current_dir().expect("failed to get current directory");
+    let venv_name = resolve_venv_name(None);
+    let venv_path = match find_venv_upward(&cwd, &venv_name) {
+        Some(p) => p,
+        None => {
+            eprintln!("uv-shell status: no {} found in {} or any parent directory", venv_name, cwd.display());
+            std::process::exit(1);
+        }
+    };
+
+    let cfg_path = venv_path.join("pyvenv.cfg");
+    let cfg = fs::read_to_string(&cfg_path).unwrap_or_default();
+
+    // Parse version_info and prompt from pyvenv.cfg
+    let python_version = cfg.lines()
+        .find_map(|l| l.strip_prefix("version_info = "))
+        .unwrap_or("unknown");
+    let prompt = cfg.lines()
+        .find_map(|l| l.strip_prefix("prompt = "))
+        .unwrap_or("(none)");
+
+    // Activated if $VIRTUAL_ENV points at this venv
+    let active_venv = env::var("VIRTUAL_ENV").ok();
+    let activated = active_venv
+        .as_ref()
+        .map(|v| PathBuf::from(v) == venv_path)
+        .unwrap_or(false);
+
+    // Count packages by .dist-info dirs in site-packages
+    let package_count = count_packages(&venv_path);
+
+    println!("venv:      {}", venv_path.display());
+    println!("python:    {python_version}");
+    println!("prompt:    {prompt}");
+    println!("activated: {}", if activated { "yes" } else { "no" });
+    println!("packages:  {package_count}");
+}
+
+/// Count installed packages by .dist-info directories in site-packages.
+fn count_packages(venv_path: &PathBuf) -> usize {
+    // Unix: lib/pythonX.Y/site-packages, Windows: Lib/site-packages
+    let lib_dir = if cfg!(windows) {
+        venv_path.join("Lib").join("site-packages")
+    } else {
+        // Find the first lib/pythonX.Y directory
+        let lib = venv_path.join("lib");
+        fs::read_dir(&lib)
+            .into_iter()
+            .flatten()
+            .filter_map(|e| e.ok())
+            .find(|e| e.file_name().to_string_lossy().starts_with("python"))
+            .map(|e| e.path().join("site-packages"))
+            .unwrap_or_else(|| lib.join("site-packages"))
+    };
+
+    fs::read_dir(&lib_dir)
+        .into_iter()
+        .flatten()
+        .filter_map(|e| e.ok())
+        .filter(|e| e.file_name().to_string_lossy().ends_with(".dist-info"))
+        .count()
+}
+
 fn activate_venv(venv_path: &PathBuf) {
     let bin_dir = get_bin_dir();
     let venv_bin = venv_path.join(bin_dir);
@@ -293,6 +357,7 @@ Usage: uv-shell [OPTIONS]
        uv-shell completions <SHELL>
 
 Commands:
+  status           Show venv info: path, python version, activated state, package count
   anchor           Print export commands for shell rc eval (auto-detects shell)
                      bash/zsh : eval \"$(uv-shell anchor)\"
                      fish     : uv-shell anchor | source
@@ -409,6 +474,10 @@ fn main() {
         match first.as_str() {
             "--version" | "-V" => {
                 println!("uv-shell {}", env!("CARGO_PKG_VERSION"));
+                return;
+            }
+            "status" => {
+                status();
                 return;
             }
             "anchor" => {
