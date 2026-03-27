@@ -59,7 +59,7 @@ fn help_short_flag() {
 // ── anchor (default / bash) ─────────────────────────────────────
 
 #[test]
-fn anchor_no_venv_silent() {
+fn anchor_no_venv_reports_on_stderr() {
     let dir = tmpdir("anchor-none");
     let out = Command::new(bin())
         .arg("anchor")
@@ -69,7 +69,12 @@ fn anchor_no_venv_silent() {
     assert!(out.status.success());
     assert!(
         out.stdout.is_empty(),
-        "anchor should produce no output without .venv"
+        "anchor should produce no stdout without .venv"
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("no .venv found"),
+        "anchor should explain why it produced no output, got: {stderr}"
     );
     let _ = fs::remove_dir_all(&dir);
 }
