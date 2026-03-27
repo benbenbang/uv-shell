@@ -279,6 +279,7 @@ Options (forwarded to `uv venv`):
       --no-config               Avoid discovering configuration files
   -q, --quiet                   Quiet output
   -v, --verbose                 Verbose output
+  -V, --version                 Show version
   -h, --help                    Show this help message
 
 All other `uv venv` options are also forwarded. See `uv venv --help` for the full list.
@@ -360,6 +361,10 @@ fn main() {
     // Subcommand dispatch
     if let Some(first) = user_args.first() {
         match first.as_str() {
+            "--version" | "-V" => {
+                println!("uv-shell {}", env!("CARGO_PKG_VERSION"));
+                return;
+            }
             "anchor" => {
                 let anchor_args = &user_args[1..];
                 let shell_override = parse_anchor_shell(anchor_args);
