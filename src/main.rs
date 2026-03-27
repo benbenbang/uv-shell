@@ -11,11 +11,21 @@ fn get_bin_dir() -> &'static str {
     }
 }
 
-fn get_venv_path() -> PathBuf {
-    let venv = PathBuf::from(".venv");
+/// Resolve the venv directory name from `--venv-path` flag, `$UV_SHELL_VENV`, or `.venv`.
+fn resolve_venv_name(flag: Option<&str>) -> String {
+    flag.map(|s| s.to_string())
+        .or_else(|| env::var("UV_SHELL_VENV").ok())
+        .unwrap_or_else(|| ".venv".to_string())
+}
+
+fn get_venv_path(name: &str) -> PathBuf {
+    let venv = PathBuf::from(name);
+    if venv.is_absolute() {
+        return venv;
+    }
     venv.canonicalize().unwrap_or_else(|_| {
         let mut cwd = env::current_dir().expect("failed to get current directory");
-        cwd.push(".venv");
+        cwd.push(name);
         cwd
     })
 }
@@ -205,11 +215,16 @@ fn activate_venv(venv_path: &PathBuf) {
     }
 }
 
-/// Walk from `start` up to the filesystem root looking for `.venv/pyvenv.cfg`.
-fn find_venv_upward(start: &std::path::Path) -> Option<PathBuf> {
+/// Walk from `start` up to the filesystem root looking for `<name>/pyvenv.cfg`.
+/// If `name` is an absolute path, checks it directly without traversal.
+fn find_venv_upward(start: &std::path::Path, name: &str) -> Option<PathBuf> {
+    let p = PathBuf::from(name);
+    if p.is_absolute() {
+        return if p.is_dir() && p.join("pyvenv.cfg").exists() { Some(p) } else { None };
+    }
     let mut dir = start;
     loop {
-        let candidate = dir.join(".venv");
+        let candidate = dir.join(name);
         if candidate.is_dir() && candidate.join("pyvenv.cfg").exists() {
             return Some(candidate);
         }
@@ -222,10 +237,11 @@ fn find_venv_upward(start: &std::path::Path) -> Option<PathBuf> {
 
 fn anchor(shell_override: Option<&str>) {
     let cwd = env::current_dir().expect("failed to get current directory");
-    let venv_path = match find_venv_upward(&cwd) {
+    let venv_name = resolve_venv_name(None);
+    let venv_path = match find_venv_upward(&cwd, &venv_name) {
         Some(p) => p,
         None => {
-            eprintln!("uv-shell anchor: no .venv found in {} or any parent directory", cwd.display());
+            eprintln!("uv-shell anchor: no {} found in {} or any parent directory", venv_name, cwd.display());
             return;
         }
     };
@@ -290,6 +306,7 @@ Anchor options:
       --shell <SHELL>         Override shell detection (bash, fish, nushell, powershell, cmd)
 
 Options (forwarded to `uv venv`):
+      --venv-path <PATH>            Venv directory name or path (default: .venv, or $UV_SHELL_VENV)
   -p, --python <PYTHON>         Python interpreter to use
       --seed                    Install seed packages (pip, setuptools, wheel)
   -c, --clear                   Re-create the venv even if .venv already exists
@@ -330,12 +347,13 @@ fn print_completions(shell: &str) {
 }
 
 /// Scan args for flags we need to know about, without consuming them.
-/// Returns (has_clear, has_custom_prompt, has_help, prefix).
-fn scan_flags(args: &[String]) -> (bool, bool, bool, Option<String>) {
+/// Returns (has_clear, has_custom_prompt, has_help, prefix, venv_path).
+fn scan_flags(args: &[String]) -> (bool, bool, bool, Option<String>, Option<String>) {
     let mut has_clear = false;
     let mut has_prompt = false;
     let mut has_help = false;
     let mut prefix: Option<String> = None;
+    let mut venv_path: Option<String> = None;
 
     let mut iter = args.iter();
     while let Some(arg) = iter.next() {
@@ -348,18 +366,23 @@ fn scan_flags(args: &[String]) -> (bool, bool, bool, Option<String>) {
             "--prefix" => {
                 prefix = iter.next().map(|s| s.to_string());
             }
+            "--venv-path" => {
+                venv_path = iter.next().map(|s| s.to_string());
+            }
             "-h" | "--help" => has_help = true,
             _ => {
                 if arg.starts_with("--prompt=") {
                     has_prompt = true;
                 } else if let Some(val) = arg.strip_prefix("--prefix=") {
                     prefix = Some(val.to_string());
+                } else if let Some(val) = arg.strip_prefix("--venv-path=") {
+                    venv_path = Some(val.to_string());
                 }
             }
         }
     }
 
-    (has_clear, has_prompt, has_help, prefix)
+    (has_clear, has_prompt, has_help, prefix, venv_path)
 }
 
 /// Parse `anchor` subcommand args for `--shell <name>`.
@@ -410,25 +433,26 @@ fn main() {
         }
     }
 
-    let (has_clear, has_custom_prompt, has_help, prefix) = scan_flags(user_args);
+    let (has_clear, has_custom_prompt, has_help, prefix, venv_path_flag) = scan_flags(user_args);
 
     if has_help {
         print_help();
         return;
     }
 
-    let venv_path = get_venv_path();
+    let venv_name = resolve_venv_name(venv_path_flag.as_deref());
+    let venv_path = get_venv_path(&venv_name);
     let needs_create = !venv_path.is_dir() || has_clear;
 
     if needs_create {
-        // Strip --prefix and its value — it's our flag, unknown to `uv venv`
+        // Strip our own flags — unknown to `uv venv`
         let forwarded: Vec<String> = {
             let mut out = Vec::new();
             let mut iter = user_args.iter();
             while let Some(arg) = iter.next() {
-                if arg == "--prefix" {
+                if arg == "--prefix" || arg == "--venv-path" {
                     iter.next(); // skip value
-                } else if arg.starts_with("--prefix=") {
+                } else if arg.starts_with("--prefix=") || arg.starts_with("--venv-path=") {
                     // skip entirely
                 } else {
                     out.push(arg.clone());
@@ -466,7 +490,7 @@ mod tests {
 
     #[test]
     fn scan_flags_empty() {
-        let (clear, prompt, help, _) = scan_flags(&args(&[]));
+        let (clear, prompt, help, _, _) = scan_flags(&args(&[]));
         assert!(!clear);
         assert!(!prompt);
         assert!(!help);
@@ -474,43 +498,43 @@ mod tests {
 
     #[test]
     fn scan_flags_clear_short() {
-        let (clear, _, _, _) = scan_flags(&args(&["-c"]));
+        let (clear, _, _, _, _) = scan_flags(&args(&["-c"]));
         assert!(clear);
     }
 
     #[test]
     fn scan_flags_clear_long() {
-        let (clear, _, _, _) = scan_flags(&args(&["--clear"]));
+        let (clear, _, _, _, _) = scan_flags(&args(&["--clear"]));
         assert!(clear);
     }
 
     #[test]
     fn scan_flags_prompt_space() {
-        let (_, prompt, _, _) = scan_flags(&args(&["--prompt", "my-env"]));
+        let (_, prompt, _, _, _) = scan_flags(&args(&["--prompt", "my-env"]));
         assert!(prompt);
     }
 
     #[test]
     fn scan_flags_prompt_eq() {
-        let (_, prompt, _, _) = scan_flags(&args(&["--prompt=my-env"]));
+        let (_, prompt, _, _, _) = scan_flags(&args(&["--prompt=my-env"]));
         assert!(prompt);
     }
 
     #[test]
     fn scan_flags_help_short() {
-        let (_, _, help, _) = scan_flags(&args(&["-h"]));
+        let (_, _, help, _, _) = scan_flags(&args(&["-h"]));
         assert!(help);
     }
 
     #[test]
     fn scan_flags_help_long() {
-        let (_, _, help, _) = scan_flags(&args(&["--help"]));
+        let (_, _, help, _, _) = scan_flags(&args(&["--help"]));
         assert!(help);
     }
 
     #[test]
     fn scan_flags_combined() {
-        let (clear, prompt, help, _) =
+        let (clear, prompt, help, _, _) =
             scan_flags(&args(&["-p", "3.12", "--clear", "--prompt", "x", "-v"]));
         assert!(clear);
         assert!(prompt);
@@ -519,24 +543,36 @@ mod tests {
 
     #[test]
     fn scan_flags_prefix_space() {
-        let (_, _, _, prefix) = scan_flags(&args(&["--prefix", "myproject"]));
+        let (_, _, _, prefix, _) = scan_flags(&args(&["--prefix", "myproject"]));
         assert_eq!(prefix.as_deref(), Some("myproject"));
     }
 
     #[test]
     fn scan_flags_prefix_eq() {
-        let (_, _, _, prefix) = scan_flags(&args(&["--prefix=myproject"]));
+        let (_, _, _, prefix, _) = scan_flags(&args(&["--prefix=myproject"]));
         assert_eq!(prefix.as_deref(), Some("myproject"));
     }
 
     #[test]
     fn scan_flags_prompt_value_not_misread() {
         // The value after --prompt should be skipped, not treated as a flag
-        let (clear, prompt, help, _) = scan_flags(&args(&["--prompt", "--clear"]));
+        let (clear, prompt, help, _, _) = scan_flags(&args(&["--prompt", "--clear"]));
         assert!(prompt);
         // "--clear" is consumed as the prompt value, not as the clear flag
         assert!(!clear);
         assert!(!help);
+    }
+
+    #[test]
+    fn scan_flags_venv_path_space() {
+        let (_, _, _, _, venv) = scan_flags(&args(&["--venv-path", "venv"]));
+        assert_eq!(venv.as_deref(), Some("venv"));
+    }
+
+    #[test]
+    fn scan_flags_venv_path_eq() {
+        let (_, _, _, _, venv) = scan_flags(&args(&["--venv-path=.env"]));
+        assert_eq!(venv.as_deref(), Some(".env"));
     }
 
     // ── get_bin_dir ─────────────────────────────────────────────
