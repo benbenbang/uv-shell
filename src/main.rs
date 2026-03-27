@@ -221,12 +221,6 @@ fn anchor(shell_override: Option<&str>) {
     let bin_dir = get_bin_dir();
     let venv_bin = venv_path.join(bin_dir);
 
-    // Touch the activated marker file
-    let activated_path = venv_path.join("activated");
-    if !activated_path.exists() {
-        let _ = fs::File::create(&activated_path);
-    }
-
     let shell = shell_override.unwrap_or_else(|| detect_shell());
     let venv = venv_path.display();
     let bin = venv_bin.display();

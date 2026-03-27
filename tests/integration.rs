@@ -128,21 +128,6 @@ fn anchor_finds_venv_in_parent_directory() {
     let _ = fs::remove_dir_all(&dir);
 }
 
-#[test]
-fn anchor_creates_activated_marker() {
-    let dir = tmpdir_with_venv("anchor-marker");
-
-    assert!(!dir.join(".venv/activated").exists());
-
-    Command::new(bin())
-        .arg("anchor")
-        .current_dir(&dir)
-        .output()
-        .unwrap();
-
-    assert!(dir.join(".venv/activated").exists());
-    let _ = fs::remove_dir_all(&dir);
-}
 
 // ── anchor --shell (per-shell output formats) ───────────────────
 
