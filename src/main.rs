@@ -21,7 +21,19 @@ fn get_venv_path() -> PathBuf {
 }
 
 /// Auto-detect the current shell from environment.
+///
+/// Check order:
+///   1. `$FISH_VERSION`   — set by fish itself, reliable even when $SHELL lags
+///   2. `$NU_VERSION`     — set by nushell
+///   3. `$SHELL`          — login shell; may differ from the running shell
+///   4. `$PSModulePath`   — PowerShell
 fn detect_shell() -> &'static str {
+    if env::var("FISH_VERSION").is_ok() {
+        return "fish";
+    }
+    if env::var("NU_VERSION").is_ok() {
+        return "nushell";
+    }
     if let Ok(shell) = env::var("SHELL") {
         if shell.contains("fish") {
             return "fish";
