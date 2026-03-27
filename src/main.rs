@@ -198,6 +198,10 @@ fn anchor(shell_override: Option<&str>) {
     let cfg_path = venv_path.join("pyvenv.cfg");
 
     if !venv_path.is_dir() || !cfg_path.exists() {
+        eprintln!(
+            "uv-shell anchor: no .venv found in {}",
+            venv_path.parent().unwrap_or(&venv_path).display()
+        );
         return;
     }
 
