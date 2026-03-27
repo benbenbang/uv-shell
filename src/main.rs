@@ -193,17 +193,30 @@ fn activate_venv(venv_path: &PathBuf) {
     }
 }
 
-fn anchor(shell_override: Option<&str>) {
-    let venv_path = get_venv_path();
-    let cfg_path = venv_path.join("pyvenv.cfg");
-
-    if !venv_path.is_dir() || !cfg_path.exists() {
-        eprintln!(
-            "uv-shell anchor: no .venv found in {}",
-            venv_path.parent().unwrap_or(&venv_path).display()
-        );
-        return;
+/// Walk from `start` up to the filesystem root looking for `.venv/pyvenv.cfg`.
+fn find_venv_upward(start: &std::path::Path) -> Option<PathBuf> {
+    let mut dir = start;
+    loop {
+        let candidate = dir.join(".venv");
+        if candidate.is_dir() && candidate.join("pyvenv.cfg").exists() {
+            return Some(candidate);
+        }
+        match dir.parent() {
+            Some(parent) => dir = parent,
+            None => return None,
+        }
     }
+}
+
+fn anchor(shell_override: Option<&str>) {
+    let cwd = env::current_dir().expect("failed to get current directory");
+    let venv_path = match find_venv_upward(&cwd) {
+        Some(p) => p,
+        None => {
+            eprintln!("uv-shell anchor: no .venv found in {} or any parent directory", cwd.display());
+            return;
+        }
+    };
 
     let bin_dir = get_bin_dir();
     let venv_bin = venv_path.join(bin_dir);
