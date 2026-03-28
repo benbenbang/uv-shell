@@ -109,8 +109,65 @@ fn find_in_path(name: &str) -> Option<PathBuf> {
         .find(|path| path.is_file() && is_executable(path))
 }
 
+const CACHE_TTL_SECS: u64 = 60;
+
+/// Returns `~/.cache/uv-shell/plugins` (or `$XDG_CACHE_HOME/uv-shell/plugins`).
+fn plugin_cache_path() -> Option<PathBuf> {
+    let base = env::var("XDG_CACHE_HOME")
+        .map(PathBuf::from)
+        .or_else(|_| env::var("HOME").map(|h| PathBuf::from(h).join(".cache")))
+        .ok()?;
+    Some(base.join("uv-shell").join("plugins"))
+}
+
+/// Read cached plugin list if it exists, is younger than CACHE_TTL_SECS,
+/// and was written for the same PATH.
+fn read_plugin_cache() -> Option<Vec<String>> {
+    let path = plugin_cache_path()?;
+    let content = std::fs::read_to_string(&path).ok()?;
+    let mut lines = content.lines();
+
+    let ts: u64 = lines.next()?.parse().ok()?;
+    let cached_path = lines.next()?;
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()?
+        .as_secs();
+
+    if now.saturating_sub(ts) > CACHE_TTL_SECS {
+        return None;
+    }
+    if cached_path != env::var("PATH").unwrap_or_default() {
+        return None;
+    }
+
+    Some(lines.map(|l| l.to_string()).collect())
+}
+
+/// Write plugin list to cache with current timestamp and PATH snapshot.
+fn write_plugin_cache(plugins: &[String]) {
+    let Some(path) = plugin_cache_path() else { return };
+    let Some(parent) = path.parent() else { return };
+    let _ = std::fs::create_dir_all(parent);
+
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+
+    let current_path = env::var("PATH").unwrap_or_default();
+    let content = format!("{}\n{}\n{}", now, current_path, plugins.join("\n"));
+    let _ = std::fs::write(&path, content);
+}
+
 /// Discover all `uv-<name>` plugins in PATH, returning `<name>` for each.
+/// Results are cached for CACHE_TTL_SECS seconds.
 fn discover_plugins() -> Vec<String> {
+    if let Some(cached) = read_plugin_cache() {
+        return cached;
+    }
+
     let mut plugins: Vec<String> = env::split_paths(&env::var("PATH").unwrap_or_default())
         .flat_map(|dir| std::fs::read_dir(dir).into_iter().flatten())
         .filter_map(|entry| entry.ok())
@@ -126,6 +183,7 @@ fn discover_plugins() -> Vec<String> {
 
     plugins.sort();
     plugins.dedup();
+    write_plugin_cache(&plugins);
     plugins
 }
 
