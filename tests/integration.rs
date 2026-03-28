@@ -396,6 +396,62 @@ fn python_version_forwarded() {
 
 // ── completions ─────────────────────────────────────────────────
 
+// ── status ───────────────────────────────────────────────────────
+
+#[test]
+fn status_shows_venv_info() {
+    let dir = tmpdir_with_venv("status-basic");
+
+    let out = Command::new(bin())
+        .arg("status")
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains("venv:"), "missing venv line");
+    assert!(stdout.contains("python:"), "missing python line");
+    assert!(stdout.contains("activated:"), "missing activated line");
+    assert!(stdout.contains("packages:"), "missing packages line");
+    assert!(stdout.contains("no"), "should not be activated");
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn status_no_venv_exits_nonzero() {
+    let dir = tmpdir("status-none");
+
+    let out = Command::new(bin())
+        .arg("status")
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(stderr.contains("no .venv found"));
+    let _ = fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn status_finds_venv_in_parent() {
+    let dir = tmpdir_with_venv("status-traversal");
+    let subdir = dir.join("src");
+    fs::create_dir_all(&subdir).unwrap();
+
+    let out = Command::new(bin())
+        .arg("status")
+        .current_dir(&subdir)
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(stdout.contains(dir.join(".venv").to_str().unwrap()));
+    let _ = fs::remove_dir_all(&dir);
+}
+
+// ── completions ──────────────────────────────────────────────────
+
 #[test]
 fn completions_bash() {
     let out = Command::new(bin())
