@@ -1,10 +1,20 @@
-[package]
-name = "uv-shell"
-version = "1.0.0"
+[workspace]
+members = ["adds-on"]
+
+[workspace.package]
+version = "2.6.0"
 edition = "2024"
 license = "MIT"
-description = "Create and activate Python virtual environments with uv"
 repository = "https://github.com/benbenbang/uv-shell"
 authors = ["benbenbang <bn@bitbrew.dev>"]
+
+[package]
+name = "uv-shell"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Create and activate Python virtual environments with uv"
+repository.workspace = true
+authors.workspace = true
 
 [dependencies]

@@ -1,8 +1,8 @@
 [package]
 name = "uv"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 description = "uv wrapper with plugin discovery (uv-xxx → uv xxx)"
-license = "MIT"
+license.workspace = true
 
 [dependencies]
