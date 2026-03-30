@@ -532,7 +532,10 @@ fn main() {
         create_venv(&venv_path, &forwarded);
     }
 
-    if !has_custom_prompt {
+    // Only update the prompt when we just created (or recreated) the venv.
+    // Reusing an existing venv leaves pyvenv.cfg untouched so any prompt set
+    // during creation (via --prompt or --prefix) is preserved.
+    if needs_create && !has_custom_prompt {
         update_prompt(&venv_path, prefix.as_deref());
     }
 
