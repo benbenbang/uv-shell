@@ -21,7 +21,8 @@ SPECIAL COMMANDS:
                         →  real uv completions + plugins injected
                            shells: bash zsh fish nushell
     uv __complete       →  list discovered plugins (used by shell completions)
-    uv --version, -V    →  show wrapper version
+    uv --wrapper-version →  show this wrapper's version
+                           (--version / -V pass through to the real uv)
     uv --help, -h       →  show this message
 
 ENVIRONMENT:
@@ -43,7 +44,12 @@ fn main() {
         Some("-h") | Some("--help") => {
             print_help();
         }
-        Some("--version") | Some("-V") => {
+        // Report the wrapper's own version under a dedicated flag. We must NOT
+        // intercept `--version`/`-V`: tools like pipx and uv's own bootstrap run
+        // `uv --version` and parse the second whitespace token as a semver — a
+        // banner like "uv (plugin wrapper) 2.6.0" breaks them ("Unrecognized uv
+        // version '(plugin'"). Those flags fall through to the real uv below.
+        Some("--wrapper-version") => {
             println!("uv (plugin wrapper) {}", env!("CARGO_PKG_VERSION"));
         }
         // Dynamic plugin discovery — called by shell completion at tab-press time

@@ -45,23 +45,47 @@ fn help_short_flag() {
 
 // ── version ─────────────────────────────────────────────────────
 
+/// The wrapper exposes its own version under a dedicated flag.
 #[test]
-fn version_long_flag() {
-    let out = wrapper(&["--version"]);
+fn wrapper_version_flag() {
+    let out = wrapper(&["--wrapper-version"]);
     assert!(out.status.success());
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
         stdout.contains("uv (plugin wrapper)"),
-        "expected version line, got: {stdout}"
+        "expected wrapper version line, got: {stdout}"
     );
 }
 
+/// `--version` must pass through to the real uv unchanged so version-parsing
+/// tools (pipx, uv's own bootstrap) see uv's exact output, not our banner.
 #[test]
-fn version_short_flag() {
+fn version_long_flag_passes_through() {
+    let out = wrapper(&["--version"]);
+    assert!(out.status.success());
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        !stdout.contains("plugin wrapper"),
+        "wrapper banner leaked into --version output: {stdout}"
+    );
+    // Real uv prints `uv <semver> ...`; the second token must parse as a version.
+    let second = stdout.split_whitespace().nth(1).unwrap_or("");
+    assert!(
+        second.split('.').next().map(|s| s.chars().all(|c| c.is_ascii_digit())).unwrap_or(false),
+        "expected `uv <semver>`, got: {stdout}"
+    );
+}
+
+/// `-V` must also pass through to the real uv.
+#[test]
+fn version_short_flag_passes_through() {
     let out = wrapper(&["-V"]);
     assert!(out.status.success());
     let stdout = String::from_utf8_lossy(&out.stdout);
-    assert!(stdout.contains("uv (plugin wrapper)"));
+    assert!(
+        !stdout.contains("plugin wrapper"),
+        "wrapper banner leaked into -V output: {stdout}"
+    );
 }
 
 // ── __complete ──────────────────────────────────────────────────
